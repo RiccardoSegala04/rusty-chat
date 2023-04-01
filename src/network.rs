@@ -1,4 +1,5 @@
 use std::net::{TcpStream, TcpListener, SocketAddr, Shutdown};
+use std::io::{Write, Read};
 
 pub struct Peer {
     stream: TcpStream,
@@ -6,26 +7,36 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn connect(address: &str) -> std::io::Result<Self> {
+    pub fn connect(address: &str, name: &str) -> std::io::Result<Self> {
 
-        let stream = TcpStream::connect(address)?;
+        let mut stream = TcpStream::connect(address)?;
+
+        stream.write(name.as_bytes())?;
+
+        let mut buffer = [0 as u8; 64];
+        stream.read(&mut buffer)?;
 
         Ok(Peer { 
             stream, 
-            name: String::from("CON_NAME")
+            name: std::str::from_utf8(&buffer).unwrap().to_string()
         })
     }
 
-    pub fn accept(port: u16) -> std::io::Result<Self> {
+    pub fn accept(port: u16, name: &str) -> std::io::Result<Self> {
         let listener = TcpListener::bind(
             SocketAddr::from(([127,0,0,1], port))
         )?;
 
-        let (stream, _) = listener.accept()?;
+        let (mut stream, _) = listener.accept()?;
+
+        let mut buffer = [0 as u8; 64];
+        stream.read(&mut buffer)?;
+
+        stream.write(name.as_bytes())?;
 
         Ok(Peer {
             stream,
-            name: String::from("ACC_NAME")
+            name: std::str::from_utf8(&buffer).unwrap().to_string()
         })
     }
 
@@ -38,4 +49,9 @@ impl Peer {
     pub fn get_name(&self) -> &str {
         self.name.as_str()
     }
+
+    pub fn send(&mut self, message: &str) -> Result<usize, std::io::Error> {
+        self.stream.write(message.as_bytes())
+    }
+
 }
