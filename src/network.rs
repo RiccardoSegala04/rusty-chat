@@ -60,4 +60,11 @@ impl Peer {
         Ok(std::str::from_utf8(&buf[0..len]).unwrap().to_string())
     }
 
+    pub fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            stream: self.stream.try_clone().unwrap()
+        }
+    }
+
 }

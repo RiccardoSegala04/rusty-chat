@@ -1,6 +1,8 @@
 mod network;
 use crate::network::Peer;
 use std::io;
+use std::thread;
+use std::sync::{Arc, Mutex};
 
 fn main() {
     //start_server();
@@ -9,18 +11,6 @@ fn main() {
     println!("Stopped!");
 }
 
-/*
-fn dump_string(line: &str) {
-    let bytes = line.as_bytes();
-
-    print!("[");
-    for byte in bytes {
-        print!("{} ", byte);
-    }
-    println!("]\n");
-}
-*/
-
 fn start_server() {
     println!("Server started!");   
     
@@ -28,29 +18,7 @@ fn start_server() {
     
     println!("Connected to: {}", peer.get_name());
 
-    let stdin = io::stdin();
-    loop {
-        let mut line: String = peer.recieve().unwrap();
-
-        if line.eq("quit") {
-            peer.close();
-            break;
-        }
-
-        println!("{}: {}", peer.get_name(), line);
-
-        line.clear();
-        
-        stdin.read_line(&mut line).unwrap();
-        line.pop();
-
-        peer.send(line.as_str()).unwrap();
-
-        if line.eq("quit") {
-            peer.close();
-            break;
-        }
-    }
+    chat_loop(&mut peer);
 }
 
 fn start_client() {
@@ -60,30 +28,50 @@ fn start_client() {
     
     println!("Connected to: {}", peer.get_name());
 
-    let stdin = io::stdin();
-    let mut line = String::new();
-    loop {
+    chat_loop(&mut peer);
+}
 
-        line.clear();
+fn chat_loop(peer: &mut Peer) {
 
-        stdin.read_line(&mut line).unwrap();
-        line.pop();
+    let sender = Arc::new(Mutex::new(peer.clone()));
 
-        peer.send(line.as_str()).unwrap();
+    thread::spawn(move || {
+        let stdin = io::stdin();
+        let mut line = String::new();
 
-        if line.eq("quit") {
-            peer.close();
-            break;
+        let mut stream = sender.lock().unwrap();
+
+        loop {
+            stdin.read_line(&mut line).unwrap();
+
+            if line.eq("quit\n") {
+                stream.close();
+                break;
+            }
+
+            stream.send(line.as_str()).unwrap();
+
+            line.clear();
         }
+    });
 
-        line = peer.recieve().unwrap();
+    let reciever = Arc::new(Mutex::new(peer.clone()));
 
-        println!("{}: {}", peer.get_name(), line);
+    let recv_thread = thread::spawn(move || {
+        let mut stream = reciever.lock().unwrap();
+        loop {
+            let line = stream.recieve().unwrap();
 
-        if line.eq("quit") {
-            peer.close();
-            break;
+            print!("{}: {}", stream.get_name(), line);
+
+            if line.eq("quit\n") || line.len()==0 {
+                stream.close();
+                break;
+            }
+
         }
-    }
+    });
+
+    recv_thread.join().unwrap();
 }
 
