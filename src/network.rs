@@ -56,7 +56,7 @@ impl Peer {
 
     pub fn recieve(&mut self) -> Result<String, std::io::Error> {
         let mut buf = [0 as u8; 64];
-        let len = self.stream.read(&mut buf).unwrap();
+        let len = self.stream.read(&mut buf)?;
         Ok(std::str::from_utf8(&buf[0..len]).unwrap().to_string())
     }
 
