@@ -24,7 +24,7 @@ enum ChatMode {
         destination: String,
     },
     Accept {
-        #[arg(short, long, default_value_t=4444)]
+        #[arg(short, long)]
         port: u16,
     },
 }
