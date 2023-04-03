@@ -3,31 +3,40 @@ use crate::network::Peer;
 use std::io;
 use std::thread;
 use std::sync::{Arc, Mutex};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about=None)]
 struct Args {
-    #[arg(short, long)]
+
+    #[command(subcommand)]
+    mode: ChatMode,
+    
+    #[arg(short, long)] 
     name: String,
 
-    #[arg(short, long)]
-    address: String,
+}
 
-    #[arg(short, long, action)]
-    server: bool,
-
-    #[arg(short, long, default_value_t=4444)]
-    port: u16,
+#[derive(Subcommand)]
+enum ChatMode {
+    Connect {
+        #[arg(short, long)]
+        destination: String,
+    },
+    Accept {
+        #[arg(short, long, default_value_t=4444)]
+        port: u16,
+    },
 }
 
 fn main() {
     let args = Args::parse();
 
-    if args.server {
-        start_server(args.port, args.name.as_str());
-    } else {
-        start_client(args.address.as_str(), args.name.as_str());
+    match args.mode {
+        ChatMode::Connect{destination} => start_client(
+            destination.as_str(), args.name.as_str()),
+
+        ChatMode::Accept{port} => start_server(port, args.name.as_str()),
     }
 
     println!("Stopped!");
