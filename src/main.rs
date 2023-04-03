@@ -11,15 +11,13 @@ struct Args {
 
     #[command(subcommand)]
     mode: ChatMode,
-    
-    
 
 }
 
 #[derive(Subcommand)]
 enum ChatMode {
     Connect {
-        #[arg(short, long)]
+        #[arg(short, long, value_name="IP:PORT")]
         destination: String,
 
         #[arg(short, long)] 
