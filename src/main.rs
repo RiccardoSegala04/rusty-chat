@@ -12,8 +12,7 @@ struct Args {
     #[command(subcommand)]
     mode: ChatMode,
     
-    #[arg(short, long)] 
-    name: String,
+    
 
 }
 
@@ -22,10 +21,16 @@ enum ChatMode {
     Connect {
         #[arg(short, long)]
         destination: String,
+
+        #[arg(short, long)] 
+        name: String,
     },
     Accept {
         #[arg(short, long)]
         port: u16,
+        
+        #[arg(short, long)] 
+        name: String,
     },
 }
 
@@ -33,10 +38,10 @@ fn main() {
     let args = Args::parse();
 
     match args.mode {
-        ChatMode::Connect{destination} => start_client(
-            destination.as_str(), args.name.as_str()),
+        ChatMode::Connect{destination, name} => start_client(
+            destination.as_str(), name.as_str()),
 
-        ChatMode::Accept{port} => start_server(port, args.name.as_str()),
+        ChatMode::Accept{port, name} => start_server(port, name.as_str()),
     }
 
     println!("Stopped!");
