@@ -54,27 +54,18 @@ fn main() {
 
         ChatMode::Accept{port, name} => start_server(port, name.as_str()),
     }
-
-    println!("Stopped!");
 }
 
 fn start_server(port: u16, name: &str) {
-    println!("Server started!");   
     
     let mut peer = Peer::accept(port, name).unwrap();
     
-    println!("Connected to: {}", peer.get_name());
-
     chat_loop(&mut peer);
 }
 
 fn start_client(address: &str, name: &str) {
-    println!("Client started!");   
-    
     let mut peer = Peer::connect(address, name).unwrap();
     
-    println!("Connected to: {}", peer.get_name());
-
     chat_loop(&mut peer);
 }
 

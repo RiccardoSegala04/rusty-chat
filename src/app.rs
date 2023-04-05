@@ -16,7 +16,6 @@ use crossterm::{
 };
 use std::sync::{Mutex, Arc};
 use std::thread;
-use std::sync::mpsc::channel;
 
 use crate::network::Peer;
 
@@ -29,7 +28,8 @@ enum InputMode {
 pub struct App {
     input: String,
     input_mode: InputMode,
-    messages: Vec<String>,
+    messages: Arc<Mutex<Vec<String>>>,
+    closed: Arc<Mutex<bool>>,
     
     peer_name: String,
     peer_addr: String,
@@ -40,7 +40,8 @@ impl App {
         Self {
             input: String::new(),
             input_mode: InputMode::Normal,
-            messages: Vec::new(),
+            messages: Arc::new(Mutex::new(Vec::new())),
+            closed: Arc::new(Mutex::new(false)),
             peer_name,
             peer_addr,
         }
@@ -51,21 +52,12 @@ impl App {
         terminal: &mut Terminal<B>, 
         peer: &mut Peer
     ) -> io::Result<()> {
+        
+        Self::start_reciever(self.messages.clone(), self.closed.clone(), peer);
 
-        let (sender, reciever) = channel();
-        let reciever_peer = Arc::new(Mutex::new(peer.clone()));
-
-        thread::spawn(move || {
-            let mut stream = reciever_peer.lock().unwrap();
-            loop {
-                let line = stream.recieve().unwrap();
-                sender.send(format!("{}: {}", stream.get_name(), line)).unwrap();
-            }
-        });
-
-        loop {
-            let _ = terminal.draw(|f| self.ui(f));
-
+        while !*self.closed.lock().unwrap() {
+            terminal.draw(|f| self.ui(f)).unwrap();
+            
             if poll(Duration::from_millis(100))? {
                 if let Event::Key(key) = event::read()? {
                     match self.input_mode {
@@ -85,7 +77,7 @@ impl App {
                         InputMode::Editing => match key.code {
                             KeyCode::Enter => {
                                 peer.send(self.input.as_str()).unwrap();
-                                self.messages.push(self.input.drain(..).collect());
+                                self.messages.lock().unwrap().push(self.input.drain(..).collect());
                             }
                             KeyCode::Char(c) => {
                                 self.input.push(c);
@@ -108,11 +100,30 @@ impl App {
                 }
             }
 
-            if let Ok(msg) = reciever.try_recv() {
-                self.messages.push(msg);
-            }   
         }
+        Ok(())
 
+    }
+
+    fn start_reciever(msg_vec: Arc<Mutex<Vec<String>>>, closed: Arc<Mutex<bool>>, peer: &Peer) {
+        
+        let reciever_peer = Arc::new(Mutex::new(peer.clone()));
+
+        thread::spawn(move || {
+            let mut stream = reciever_peer.lock().unwrap();
+            loop {
+                if let Ok(line) = stream.recieve() {
+                    if line.len() == 0 {
+                        break;
+                    }
+                    msg_vec.lock().unwrap().push(format!("{}: {}", stream.get_name(), line));
+                } else {
+                    break;
+                }
+            }
+            let mut flag = closed.lock().unwrap();
+            *flag = true;
+        });
     }
 
     fn ui<B: Backend>(&mut self, f: &mut Frame<B>) {
@@ -149,7 +160,8 @@ impl App {
         );
         f.render_widget(par, chunks[1]);
 
-        let mut messages: Vec<ListItem> = self.messages
+        let tmp = self.messages.lock().unwrap();
+        let mut messages: Vec<ListItem> = tmp
             .iter()
             .map(|m| {
                 let content = vec![Spans::from(Span::raw(m))];
@@ -169,7 +181,7 @@ impl App {
         if matches!(self.input_mode, InputMode::Editing) {
             f.set_cursor(
                 chunks[0].x + self.input.len() as u16 + 5,
-                chunks[0].y + self.messages.len() as u16);
+                chunks[0].y + tmp.len() as u16);
         }
 
     }
