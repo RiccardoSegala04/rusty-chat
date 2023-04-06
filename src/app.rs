@@ -4,15 +4,22 @@ use tui::{
     widgets::{Block, Paragraph, List, ListItem},
     layout::{Layout, Constraint, Direction},
     text::{Span, Spans},
-    style::{Style, Color},
+    style::{Style, Color, Modifier},
+    backend::CrosstermBackend,
     Terminal,
     Frame
 };
 use crossterm::{
     event::{
         self, poll,
-        Event, KeyCode
+        Event, KeyCode, EnableMouseCapture, DisableMouseCapture
     },
+    terminal::{
+        enable_raw_mode, disable_raw_mode, 
+        EnterAlternateScreen, LeaveAlternateScreen,
+    },
+    cursor::{SetCursorShape, EnableBlinking, CursorShape},
+    execute,
 };
 use std::sync::{Mutex, Arc};
 use std::thread;
@@ -31,29 +38,35 @@ pub struct App {
     messages: Arc<Mutex<Vec<String>>>,
     closed: Arc<Mutex<bool>>,
     
-    peer_name: String,
-    peer_addr: String,
+    peer: Peer,
 }
 
 impl App {
-    pub fn new(peer_name: String, peer_addr: String) -> Self {
+    pub fn new(peer: Peer) -> Self {
         Self {
             input: String::new(),
             input_mode: InputMode::Normal,
             messages: Arc::new(Mutex::new(Vec::new())),
             closed: Arc::new(Mutex::new(false)),
-            peer_name,
-            peer_addr,
+            peer,
         }
     }
 
-    pub fn run<B: Backend>(
-        &mut self, 
-        terminal: &mut Terminal<B>, 
-        peer: &mut Peer
-    ) -> io::Result<()> {
+    pub fn run(&mut self) -> io::Result<()> {
+
+        enable_raw_mode().unwrap();
+        let mut stdout = io::stdout();
+        execute!(
+            stdout, 
+            EnterAlternateScreen, 
+            EnableMouseCapture, 
+            SetCursorShape(CursorShape::Line)
+        ).unwrap();
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend).unwrap();
         
-        Self::start_reciever(self.messages.clone(), self.closed.clone(), peer);
+        Self::start_reciever(
+            self.messages.clone(), self.closed.clone(), &self.peer);
 
         while !*self.closed.lock().unwrap() {
             terminal.draw(|f| self.ui(f)).unwrap();
@@ -69,15 +82,18 @@ impl App {
                                 self.input_mode = InputMode::Selecting;
                             }
                             KeyCode::Char('q') => {
-                                peer.close();
-                                return Ok(());
+                                self.peer.close();
+                                *self.closed.lock().unwrap() = true;
                             }
                             _ => {}
                         },
                         InputMode::Editing => match key.code {
                             KeyCode::Enter => {
-                                peer.send(self.input.as_str()).unwrap();
-                                self.messages.lock().unwrap().push(self.input.drain(..).collect());
+                                self.peer.send(self.input.as_str()).unwrap();
+                                self.messages.lock().unwrap().push(format!(
+                                    "You: {}", self.input
+                                ));
+                                self.input.clear();
                             }
                             KeyCode::Char(c) => {
                                 self.input.push(c);
@@ -101,11 +117,26 @@ impl App {
             }
 
         }
+
+        disable_raw_mode().unwrap();
+        execute!(
+            terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture,
+            SetCursorShape(CursorShape::Block),
+            EnableBlinking,
+        ).unwrap();
+        terminal.show_cursor().unwrap();
+
         Ok(())
 
     }
 
-    fn start_reciever(msg_vec: Arc<Mutex<Vec<String>>>, closed: Arc<Mutex<bool>>, peer: &Peer) {
+    fn start_reciever(
+        msg_vec: Arc<Mutex<Vec<String>>>, 
+        closed: Arc<Mutex<bool>>, 
+        peer: &Peer
+    ) {
         
         let reciever_peer = Arc::new(Mutex::new(peer.clone()));
 
@@ -113,10 +144,12 @@ impl App {
             let mut stream = reciever_peer.lock().unwrap();
             loop {
                 if let Ok(line) = stream.recieve() {
-                    if line.len() == 0 {
+                    if line.is_empty() {
                         break;
                     }
-                    msg_vec.lock().unwrap().push(format!("{}: {}", stream.get_name(), line));
+                    msg_vec.lock().unwrap().push(format!(
+                        "{}: {}", stream.get_name(), line
+                    ));
                 } else {
                     break;
                 }
@@ -150,7 +183,7 @@ impl App {
         f.render_widget(par, chunks[2]);
 
         let par = Paragraph::new(Span::raw(
-            format!("[Connected to {}]", self.peer_addr))
+            format!("[Connected to {}]", self.peer.get_ip_str()))
         );
         f.render_widget(par, chunks[1]);
 
@@ -164,15 +197,27 @@ impl App {
         let mut messages: Vec<ListItem> = tmp
             .iter()
             .map(|m| {
-                let content = vec![Spans::from(Span::raw(m))];
+                let sep = m.find(' ').unwrap_or(0);
+                let content = vec![Spans::from(vec!(
+                        Span::styled(
+                            &m.as_str()[0..sep], 
+                            Style::default().add_modifier(Modifier::BOLD)),
+                            
+                        Span::raw(&m.as_str()[sep..m.len()])
+                    )
+                )];
                 ListItem::new(content)
             })
             .collect();
         
         if(matches!(self.input_mode, InputMode::Editing)||self.input.len()>0) {
-            messages.push(ListItem::new(Span::raw(
-                format!("You: {}", self.input)
-            )));
+            messages.push(ListItem::new(vec![Spans::from(vec!(
+                    Span::styled(
+                        "You: ", 
+                        Style::default().add_modifier(Modifier::BOLD)),
+                        
+                    Span::raw(self.input.as_str())
+            ))]));
         }
 
         let messages = List::new(messages).block(Block::default());
@@ -186,33 +231,4 @@ impl App {
 
     }
 }
-/*
-fn main() -> Result<(), io::Error> {
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(
-        stdout, 
-        EnterAlternateScreen, 
-        EnableMouseCapture, 
-        SetCursorShape(CursorShape::Line)
-    )?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    let mut app = App::new("Mario".to_string(), "192.168.1.35".to_string());
-    app.run(&mut terminal)?;
-
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture,
-        SetCursorShape(CursorShape::Block),
-        EnableBlinking,
-    )?;
-    terminal.show_cursor()?;
-
-    Ok(())
-}
-*/
 

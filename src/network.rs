@@ -4,6 +4,7 @@ use std::io::{Write, Read};
 pub struct Peer {
     stream: TcpStream,
     name: String,
+    ip_str: String,
 }
 
 impl Peer {
@@ -17,8 +18,9 @@ impl Peer {
         stream.read(&mut buffer)?;
 
         Ok(Peer { 
+            ip_str: stream.local_addr().unwrap().ip().to_string(),
             stream, 
-            name: std::str::from_utf8(&buffer).unwrap().to_string()
+            name: std::str::from_utf8(&buffer).unwrap().to_string(),
         })
     }
 
@@ -35,19 +37,22 @@ impl Peer {
         stream.write(name.as_bytes())?;
 
         Ok(Peer {
+            ip_str: stream.local_addr().unwrap().ip().to_string(),
             stream,
-            name: std::str::from_utf8(&buffer).unwrap().to_string()
+            name: std::str::from_utf8(&buffer).unwrap().to_string(),
         })
     }
 
     pub fn close(&self) {
-        match self.stream.shutdown(Shutdown::Both) {
-            _ => ()
-        }
+        let _ = self.stream.shutdown(Shutdown::Both);
     }
 
     pub fn get_name(&self) -> &str {
         self.name.as_str()
+    }
+
+    pub fn get_ip_str(&self) -> &str {
+        self.ip_str.as_str()
     }
 
     pub fn send(&mut self, message: &str) -> Result<usize, std::io::Error> {
@@ -63,7 +68,8 @@ impl Peer {
     pub fn clone(&self) -> Self {
         Self {
             name: self.name.clone(),
-            stream: self.stream.try_clone().unwrap()
+            stream: self.stream.try_clone().unwrap(),
+            ip_str: self.ip_str.clone(),
         }
     }
 

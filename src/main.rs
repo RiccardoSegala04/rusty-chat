@@ -4,19 +4,7 @@ use crate::network::Peer;
 mod app;
 use crate::app::App;
 
-use std::io;
 use clap::{Parser, Subcommand};
-
-use tui::{Terminal, backend::CrosstermBackend};
-use crossterm::{
-    execute, 
-    terminal::{
-        disable_raw_mode, enable_raw_mode, EnterAlternateScreen, 
-        LeaveAlternateScreen,
-    },
-    cursor::{SetCursorShape, EnableBlinking, CursorShape},
-    event::{EnableMouseCapture, DisableMouseCapture},
-};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about=None)]
@@ -58,43 +46,22 @@ fn main() {
 
 fn start_server(port: u16, name: &str) {
     
-    let mut peer = Peer::accept(port, name).unwrap();
+    let peer = Peer::accept(port, name).unwrap();
     
-    chat_loop(&mut peer);
+    chat_loop(peer);
 }
 
 fn start_client(address: &str, name: &str) {
-    let mut peer = Peer::connect(address, name).unwrap();
+    let peer = Peer::connect(address, name).unwrap();
     
-    chat_loop(&mut peer);
+    chat_loop(peer);
 }
 
-fn chat_loop(peer: &mut Peer) {
+fn chat_loop(peer: Peer) {
     
-    let mut app = App::new(peer.get_name().to_string(), "192.168.1.69".to_string());
+    let mut app = App::new(peer);
 
-    enable_raw_mode().unwrap();
-    let mut stdout = io::stdout();
-    execute!(
-        stdout, 
-        EnterAlternateScreen, 
-        EnableMouseCapture, 
-        SetCursorShape(CursorShape::Line)
-    ).unwrap();
-    let backend = CrosstermBackend::new(stdout);
-    let mut term = Terminal::new(backend).unwrap();
-
-    app.run(&mut term, peer).unwrap();
-
-    disable_raw_mode().unwrap();
-    execute!(
-        term.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture,
-        SetCursorShape(CursorShape::Block),
-        EnableBlinking,
-    ).unwrap();
-    term.show_cursor().unwrap();
+    app.run().unwrap();
 
 }
 
