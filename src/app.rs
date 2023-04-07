@@ -54,7 +54,7 @@ impl App {
     pub fn new(peer: Peer) -> Self {
         Self {
             input: String::new(),
-            input_mode: InputMode::Normal,
+            input_mode: InputMode::Editing,
             messages: Arc::new(Mutex::new(Vec::new())),
             closed: Arc::new(Mutex::new(false)),
             peer,
@@ -274,7 +274,7 @@ impl App {
     
     fn get_selected_line_len(&self) -> u16 {
         self.messages.lock().unwrap().get(
-            usize::from(self.show_idx as u16 +self.cursor_pos.line)
+            usize::from(self.cursor_pos.line)
         ).unwrap_or(&"You: ".to_string()).len() as u16
     }
 
