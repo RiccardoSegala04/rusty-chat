@@ -221,20 +221,34 @@ impl App {
 
         } else {
             execute!(stdout, SetCursorShape(CursorShape::Block)).unwrap();
-            if self.cursor_pos.line < (self.show_idx as u16) {
-                self.show_idx = usize::from(self.cursor_pos.line);
-            } else if self.cursor_pos.line+1>=(self.show_idx as u16)+chunks[0].height {
+            if self.cursor_pos.line <= (self.show_idx as u16) && self.show_idx>0 {
+                self.show_idx = usize::from(self.cursor_pos.line)-1;
+            } else if self.cursor_pos.line+2>=(self.show_idx as u16)+chunks[0].height {
                 self.show_idx += 
                     usize::from(
-                        self.cursor_pos.line+1-chunks[0].height)-self.show_idx;
+                        self.cursor_pos.line+2-chunks[0].height)-self.show_idx;
             }
         }
 
         let mut messages = Vec::new();
 
-        for i in 0..std::cmp::min(chunk_size, tmp.len().try_into().unwrap()) {
+        let mut added_sep: u16 = 0;
+
+        if self.show_idx>0 {
+            messages.push(ListItem::new(vec![Spans::from(
+                Span::styled(
+                    "~ ~ ~", 
+                    Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+            )]));
+            added_sep=1;
+        }
+
+        for i in added_sep..std::cmp::min(chunk_size, tmp.len().try_into().unwrap()) {
             let i = i as usize;
-            let msg = tmp.get((i+self.show_idx) as usize).unwrap();
+            let msg = match tmp.get((i+self.show_idx) as usize) {
+                Some(msg) => msg,
+                None => break,
+            };
             let sep = msg.find(' ').unwrap_or(0);
             let content = vec![Spans::from(vec!(
                     Span::styled(
@@ -246,14 +260,24 @@ impl App {
             )];
             messages.push(ListItem::new(content));
         }
+        
+        if self.show_idx+usize::from(chunks[0].height)<=tmp.len()+1 && 
+            !matches!(self.input_mode, InputMode::Editing) {
+            messages.push(ListItem::new(vec![Spans::from(
+                Span::styled(
+                    "~ ~ ~", 
+                    Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+            )]));
 
-        messages.push(ListItem::new(vec![Spans::from(vec!(
-            Span::styled(
-                "You: ", 
-                Style::default().add_modifier(Modifier::BOLD)),
-                
-            Span::raw(self.input.as_str())
-        ))]));
+        } else { 
+            messages.push(ListItem::new(vec![Spans::from(vec!(
+                Span::styled(
+                    "You: ", 
+                    Style::default().add_modifier(Modifier::BOLD)),
+                    
+                Span::raw(self.input.as_str())
+            ))]));
+        }
 
         let messages = List::new(messages).block(Block::default());
         f.render_widget(messages, chunks[0]);
@@ -263,6 +287,14 @@ impl App {
         let mut cursor_y = 0;
         if self.cursor_pos.line>(self.show_idx as u16) {
             cursor_y = self.cursor_pos.line-self.show_idx as u16;
+            if added_sep==1 && cursor_y<1 {
+                cursor_y=1;
+            } else if self.show_idx+usize::from(chunks[0].height)<=tmp.len()+1 && 
+                    !matches!(self.input_mode, InputMode::Editing) &&
+                    cursor_y==chunk_size {
+                cursor_y-=1;
+                self.cursor_pos.line-=1;
+            } 
         }
         
         f.set_cursor(
