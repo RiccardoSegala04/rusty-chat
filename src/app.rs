@@ -24,12 +24,13 @@ use crossterm::{
 use std::sync::{Mutex, Arc};
 use std::thread;
 
+use arboard::Clipboard;
+
 use crate::network::Peer;
 
 enum InputMode {
     Normal,
     Editing,
-    Selecting,
 }
 
 struct Point {
@@ -78,6 +79,8 @@ impl App {
         Self::start_reciever(
             self.messages.clone(), self.closed.clone(), &self.peer);
 
+        let mut clipboard = Clipboard::new().unwrap();
+
         while !*self.closed.lock().unwrap() {
             terminal.draw(|f| self.ui(f)).unwrap();
             
@@ -88,12 +91,16 @@ impl App {
                             KeyCode::Char('i') => {
                                 self.input_mode = InputMode::Editing;
                             }
-                            KeyCode::Char('v') => {
-                                self.input_mode = InputMode::Selecting;
-                            }
                             KeyCode::Char('q') => {
                                 self.peer.close();
                                 *self.closed.lock().unwrap() = true;
+                            }
+                            KeyCode::Char('y') => {
+                                if let Some(line) = self.get_selected_line() {
+                                    let start_idx = line.find(' ').unwrap();
+                                    clipboard.set_text(
+                                        &line.as_str()[start_idx+1..]).unwrap();
+                                }
                             }
                             _ => self.check_move_cursor(&key.code),
                         },
@@ -119,12 +126,6 @@ impl App {
                             }
                             _ => {}
                         },
-                        InputMode::Selecting => match key.code {
-                            KeyCode::Esc => {
-                                self.input_mode = InputMode::Normal;
-                            }
-                            _ => self.check_move_cursor(&key.code),
-                        }
                     }
                 }
             }
@@ -189,7 +190,6 @@ impl App {
         let text = match self.input_mode {
             InputMode::Normal => String::from("Press Q to quit"),
             InputMode::Editing => String::from("-- INSERT --"),
-            InputMode::Selecting => String::from("-- VISUAL --"),
         };
 
         let par = Paragraph::new(Span::raw(text));
@@ -304,10 +304,19 @@ impl App {
 
     }
     
+    fn get_selected_line(&self) -> Option<String> {
+        if let Some(line) = self.messages.lock().unwrap().get(
+                usize::from(self.cursor_pos.line)) {
+            return Some(line.clone());
+        }
+        None
+    }
+    
     fn get_selected_line_len(&self) -> u16 {
-        self.messages.lock().unwrap().get(
-            usize::from(self.cursor_pos.line)
-        ).unwrap_or(&"You: ".to_string()).len() as u16
+        if let Some(line) = self.get_selected_line() {
+            return line.len() as u16;
+        }
+        "You: ".to_string().len() as u16
     }
 
     fn check_move_cursor(&mut self, code: &KeyCode) {
