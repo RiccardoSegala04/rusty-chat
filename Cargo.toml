@@ -9,3 +9,4 @@ edition = "2021"
 clap = {version = "4.2.1", features = ["derive"]}
 tui = "0.19"
 crossterm = "0.25"
+arboard = "3.2.0"
