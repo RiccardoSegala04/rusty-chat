@@ -26,7 +26,7 @@ impl Peer {
 
     pub fn accept(port: u16, name: &str) -> std::io::Result<Self> {
         let listener = TcpListener::bind(
-            SocketAddr::from(([127,0,0,1], port))
+            SocketAddr::from(([0,0,0,0], port))
         )?;
 
         let (mut stream, _) = listener.accept()?;
