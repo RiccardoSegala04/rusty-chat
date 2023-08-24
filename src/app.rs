@@ -216,7 +216,7 @@ impl App {
                 self.show_idx = tmp.len()-usize::from(chunk_size);
             } 
             execute!(stdout, SetCursorShape(CursorShape::Line)).unwrap();
-            self.cursor_pos.col = self.input.len() as u16 + 5;
+            self.cursor_pos.col = self.input.chars().count() as u16 + 5;
             self.cursor_pos.line = tmp.len() as u16;
 
         } else {
