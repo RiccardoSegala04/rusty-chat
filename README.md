@@ -21,7 +21,7 @@ Rusty Chat is a Rust command-line tool that enables users to chat with each othe
 
 2. Clone the Rusty Chat repository to your local machine:
    ```sh
-   git clone https://github.com/your-username/rusty-chat.git
+   git clone https://github.com/RiccardoSegala04/rusty-chat.git
    ```
    
 3. Navigate to the repository's directory:
