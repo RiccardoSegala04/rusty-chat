@@ -106,11 +106,11 @@ impl App {
                         },
                         InputMode::Editing => match key.code {
                             KeyCode::Enter => {
-                                let to_send = self.input.trim();
-                                if !to_send.is_empty() {
-                                    self.peer.send(to_send).unwrap();
+                                if !self.input.trim().is_empty() {
+                                    self.input.push('\n');
+                                    self.peer.send(&self.input).unwrap();
                                     self.messages.lock().unwrap().push(format!(
-                                        "You: {}", to_send
+                                        "You: {}", &self.input[0..self.input.len()-1]
                                     ));
                                     self.input.clear();
                                 }
@@ -156,14 +156,20 @@ impl App {
 
         thread::spawn(move || {
             let mut stream = reciever_peer.lock().unwrap();
+            let mut line_buf = String::new();
             loop {
                 if let Ok(line) = stream.recieve() {
                     if line.is_empty() {
                         break;
                     }
-                    msg_vec.lock().unwrap().push(format!(
-                        "{}: {}", stream.get_name(), line
-                    ));
+                    line_buf.push_str(&line);
+                    if line.ends_with("\n") {
+                        line_buf.pop();
+                        msg_vec.lock().unwrap().push(format!(
+                            "{}: {}", stream.get_name(), line_buf
+                        ));
+                        line_buf.clear();
+                    } 
                 } else {
                     break;
                 }
