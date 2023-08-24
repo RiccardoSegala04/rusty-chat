@@ -30,9 +30,9 @@ Rusty Chat is a Rust command-line tool that enables users to chat with each othe
    ```
    
 4. Build the project using Cargo, the Rust package manager
-  ```sh
-  cargo build --release
-  ```
+    ```sh
+    cargo build --release
+    ```
 
 6. The compiled binary will be located at target/release/rusty-chat. You can add this binary to your system's PATH or use it with the full path.
 
